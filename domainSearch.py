@@ -2,15 +2,48 @@ import whois
 import dns.resolver
 from googlesearch import search
 from fuzzywuzzy import process
+from fuzzywuzzy import fuzz
+from urllib.parse import urlparse
+
+# --- Enhanced Scoring Based on Multiple Heuristics ---
+def score_url(company_name, url):
+    domain = urlparse(url).netloc.lower().replace("www.", "")
+    score = 0
+
+    # Heuristic 1: Exact domain match
+    if company_name.lower() in domain:
+        score += 50
+
+    # Heuristic 2: Preferred TLDs
+    preferred_tlds = [".com", ".org", ".edu", ".gov", ".net"]
+    if any(domain.endswith(tld) for tld in preferred_tlds):
+        score += 20
+
+    # Heuristic 3: Fuzzy match for near-exact matches
+    similarity_score = fuzz.partial_ratio(company_name.lower(), domain)
+    score += similarity_score  # Adds fuzzy match % directly
+
+    # Heuristic 4: Penalize suspicious subdomains (e.g., 'blog.', 'shop.')
+    if domain.startswith(("blog.", "shop.", "news.")):
+        score -= 10
+
+    return score
 
 # --- Part 1: Google Search to Find Official URL ---
 def google_search_for_website(company_name):
     query = f"{company_name} official website"
-    # Retrieve top 5 results
-    for result in search(query, num_results=5):
-        if company_name.lower() in result.lower():  # prioritize results with company name
-            return result
-    return None
+    try:
+        candidates = list(search(query, num_results=10))
+        if not candidates:
+            return None
+        # Score each URL and pick the best
+        ranked_candidates = sorted(
+            candidates, key=lambda x: score_url(company_name, x), reverse=True
+        )
+        return ranked_candidates[0]  # Best match based on score
+    except Exception as e:
+        print(f"Error: {e}")
+        return None
 
 # --- Part 2: WHOIS Domain Lookup ---
 def verify_domain(domain_url):
@@ -31,8 +64,8 @@ def is_valid_domain(domain):
         return False
 
 # --- Part 4: Fuzzy Matching for Near-Matches ---
-def fuzzy_match_input(input_site, possible_sites):
-    best_match = process.extractOne(input_site, possible_sites)
+def fuzzy_match_input(input_site):
+    best_match = process.extractOne(input_site)
     return best_match
 
 # --- Main Function ---
@@ -50,22 +83,12 @@ def get_official_website(company_name, possible_sites=[]):
             print(f"Valid official website found via WHOIS & DNS: {site}")
             return site
 
-    # Step 3: Fuzzy matching for near-matches (if provided a list)
-    if possible_sites:
-        best_match = fuzzy_match_input(company_name, possible_sites)
-        print(f"Best fuzzy match: {best_match[0]} with confidence {best_match[1]}%")
-        return best_match[0]
-    
-    print("No valid website found.")
-    return None
-
 # --- Test with a list of companies ---
-companies = ["Tesla", "SpaceX", "Harvard University"]
-possible_urls = ["spacex.com", "space-x.com", "spacexofficial.com"]
+companies = ["Northrop Grumman - El Segundo", "Boeing", "Lockheed Martin", "Raytheon", "General Dynamics"]
 
 for company in companies:
     print(f"Searching for website of {company}...")
-    official_website = get_official_website(company, possible_sites=possible_urls)
+    official_website = get_official_website(company)
     if official_website:
         print(f"Official website for {company}: {official_website}")
     print("\n" + "-"*50 + "\n")
