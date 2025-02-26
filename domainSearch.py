@@ -1,5 +1,3 @@
-import whois
-import dns.resolver
 from googlesearch import search
 from fuzzywuzzy import fuzz
 from urllib.parse import urlparse
