@@ -4,12 +4,12 @@ from urllib.parse import urlparse
 import os
 import openpyxl
 from time import sleep
+from ECC import scrape_header
 
 # --- Enhanced Scoring Based on Multiple Heuristics ---
 def score_url(company_name, url):
     header_text = None
-    #header_text = scrape_header(url)
-    #print(header_text)
+    header_text = scrape_header(url)
     
     domain = urlparse(url).netloc.lower().replace("www.", "")
     score = 0
@@ -25,7 +25,6 @@ def score_url(company_name, url):
 
     if header_text:
         header_similarity_score = fuzz.partial_ratio(company_name.lower(), header_text.lower())
-        print(f"Header similarity score for {company_name.lower()} in {url}: {header_similarity_score}")
         score += header_similarity_score
     return score
 
@@ -87,7 +86,7 @@ if __name__ == "__main__":
             sheet.save(file_path)
             print("Saved progress.")
 
-        sleep.delay(3) # Delay for 3 seconds to avoid being blocked by Google
+        sleep(1) # Delay for 1 seconds to avoid being blocked by Google
     
     print("Rows complete.")
     # Save the changes to the workbook
