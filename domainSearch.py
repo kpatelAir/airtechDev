@@ -1,39 +1,40 @@
 import whois
 import dns.resolver
 from googlesearch import search
-from fuzzywuzzy import process
 from fuzzywuzzy import fuzz
 from urllib.parse import urlparse
+import os
+import openpyxl
+from time import sleep
 
 # --- Enhanced Scoring Based on Multiple Heuristics ---
 def score_url(company_name, url):
+    header_text = None
+    #header_text = scrape_header(url)
+    #print(header_text)
+    
     domain = urlparse(url).netloc.lower().replace("www.", "")
     score = 0
 
-    # Heuristic 1: Exact domain match
-    if company_name.lower() in domain:
-        score += 50
-
-    # Heuristic 2: Preferred TLDs
+    # Preferred TLDs
     preferred_tlds = [".com", ".org", ".edu", ".gov", ".net"]
     if any(domain.endswith(tld) for tld in preferred_tlds):
         score += 20
 
-    # Heuristic 3: Fuzzy match for near-exact matches
-    similarity_score = fuzz.partial_ratio(company_name.lower(), domain)
-    score += similarity_score  # Adds fuzzy match % directly
-
-    # Heuristic 4: Penalize suspicious subdomains (e.g., 'blog.', 'shop.')
+    # Penalize suspicious subdomains (e.g., 'blog.', 'shop.')
     if domain.startswith(("blog.", "shop.", "news.")):
         score -= 10
 
+    if header_text:
+        header_similarity_score = fuzz.partial_ratio(company_name.lower(), header_text.lower())
+        print(f"Header similarity score for {company_name.lower()} in {url}: {header_similarity_score}")
+        score += header_similarity_score
     return score
 
-# --- Part 1: Google Search to Find Official URL ---
-def google_search_for_website(company_name):
-    query = f"{company_name} official website"
+def google_search_for_website(company_name, postal_code = None):
+    query = f"{company_name} {postal_code} official website"
     try:
-        candidates = list(search(query, num_results=10))
+        candidates = list(search(query, num_results=3))
         if not candidates:
             return None
         # Score each URL and pick the best
@@ -45,50 +46,54 @@ def google_search_for_website(company_name):
         print(f"Error: {e}")
         return None
 
-# --- Part 2: WHOIS Domain Lookup ---
-def verify_domain(domain_url):
-    try:
-        w = whois.whois(domain_url)
-        if w.org or w.domain_name:  # If company/org information exists
-            return True
-    except Exception:
-        return False
-    return False
-
-# --- Part 3: DNS Validation ---
-def is_valid_domain(domain):
-    try:
-        dns.resolver.resolve(domain, 'A')  # Look for A records (address)
-        return True
-    except Exception:
-        return False
-
-# --- Part 4: Fuzzy Matching for Near-Matches ---
-def fuzzy_match_input(input_site):
-    best_match = process.extractOne(input_site)
-    return best_match
-
-# --- Main Function ---
-def get_official_website(company_name, possible_sites=[]):
-    # Step 1: Search Google for official website
-    website = google_search_for_website(company_name)
+def get_official_website(company_name, postalCode):
+    # Search Google for official website
+    website = google_search_for_website(company_name, postalCode)
     if website:
-        print(f"Initial Google search result: {website}")
+        print(f"{company_name}: {website}")
         return website
+
+
+columnMap = {
+    'CompanyName': 2,
+    'SaveSite' : 3,
+    'PostalCode': 4,
+    'City' : 5,
+}
+
+if __name__ == "__main__":
+    # Change file name
+    file_name = "hubspot-crm-exports-company_site-2025-02-26.xlsx"
     
-    # Step 2: Validate with WHOIS and DNS if domain is accurate
-    possible_sites = possible_sites or [f"{company_name.lower()}.com", f"www.{company_name.lower()}.com"]
-    for site in possible_sites:
-        if verify_domain(site) and is_valid_domain(site):
-            print(f"Valid official website found via WHOIS & DNS: {site}")
-            return site
+    # Assuming the file is on the desktop
+    desktop_path = os.path.join(os.path.expanduser('~'), 'Desktop')
+    # Full path to the Excel file
+    file_path = os.path.join(desktop_path, file_name)
 
-# --- Test with a list of companies ---
-companies = ["Northrop Grumman - El Segundo", "Boeing", "Lockheed Martin", "Raytheon", "General Dynamics"]
+    workbook = openpyxl.load_workbook(file_path)
+    print("Excel file opened successfully!")
+    # Access the active sheet
+    sheet = workbook.active
+    max_row = 10 # use sheet.max_row for the full sheet
 
-for company in companies:
-    print(f"Searching for website of {company}...")
-    official_website = get_official_website(company)
-    if official_website:
-        print(f"Official website for {company}: {official_website}")
-    print("\n" + "-"*50 + "\n")
+    for row in range(2, max_row + 1):
+        # Save the first column cell value
+        companyName = sheet.cell(row=row, column=columnMap['CompanyName']).value
+        postalCode = sheet.cell(row=row, column=columnMap['PostalCode']).value
+
+        site = get_official_website(companyName, postalCode)
+
+        sheet.cell(row=row, column=columnMap['SaveSite']).value = site
+
+        if row % 25 == 0:
+            sheet.save(file_path)
+            print("Saved progress.")
+
+        sleep.delay(3) # Delay for 3 seconds to avoid being blocked by Google
+    
+    print("Rows complete.")
+    # Save the changes to the workbook
+    workbook.save(file_path)
+    print("Excel file updated successfully!")
+
+

@@ -113,6 +113,44 @@ def scrape(url):
         return ' '
 
 
+def scrape_header(url):
+    # Define the User-Agent to avoid error 403
+    headers = requests.utils.default_headers()
+    headers.update( {
+            'User-Agent': 'ECC Agent 1.0',
+            'From': 'kpatel@airtech.com'
+        }
+    )
+    try:
+        # Send a GET request to the URL
+        response = requests.get(url, headers=headers, timeout=(10, 10))
+
+        # Check if the request was successful
+        if response.status_code == 200:
+            # Parse the HTML content of the page
+            soup = BeautifulSoup(response.text, 'lxml')
+            
+            # Find the header section
+            header = soup.find('header')
+            
+            if header:
+                # Extract the text content from the header
+                header_text = ' '.join(header.stripped_strings)
+                return header_text
+            else:
+                print("Header not found.")
+                return None
+        else:
+            print(f"Failed to retrieve the page. Status code: {response.status_code}")
+            return None
+
+    except requests.exceptions.Timeout:
+        print(f"Request to {url} timed out.")
+        return None
+    except requests.exceptions.RequestException as e:
+        print(f"Request to {url} failed: {e}")
+        return None
+
 # Function to get ECC category counts from string and scrape JS sites
 def get_ecc(text, url=None):
     if text != ' ':
@@ -265,8 +303,8 @@ if __name__ == "__main__":
     """
 
     # Test the ECC function with a sample URL
-    scrape_text = scrape("https://www.airtechintl.com/")
+    scrape_text = scrape("https://ame.usc.edu/")
     print(scrape_text)
-    print(get_ecc(scrape_text, "https://www.airtechintl.com/"))
+    print(get_ecc(scrape_text, "https://ame.usc.edu/"))
 
     driver.close()
